@@ -9,7 +9,5 @@ def register_solver(name):
     return decorator
 
 def get_solver(name, *args):
-    print("solver")
-    print(solvers)
     solver = solvers[name](*args)
     return solver

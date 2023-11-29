@@ -174,3 +174,139 @@ class ASDADataset:
 		test_loader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size)
 
 		return train_loader, val_loader, test_loader, train_idx
+
+class SemiDataset:
+	# Active Semi-supervised DA Dataset class
+	def __init__(self, name, data_dir='data', valid_ratio=0.2, batch_size=128, augment=False, labeled = 0.4):
+		self.name = name # source
+		self.data_dir = data_dir
+		self.valid_ratio = valid_ratio
+		self.batch_size = batch_size
+		self.train_size = None
+		self.train_dataset = None
+		self.num_classes = None
+		self.labeled = labeled
+
+	def get_num_classes(self):
+		return self.num_classes
+
+	def get_dsets(self, normalize=True, apply_transforms=True):
+		if self.name == "mnist":
+			mean, std = 0.5, 0.5
+			normalize_transform = transforms.Normalize((mean,), (std,)) \
+								  if normalize else transforms.Normalize((0,), (1,))
+			train_transforms = transforms.Compose([
+									   transforms.ToTensor(),
+									   normalize_transform
+								   ])
+			test_transforms = transforms.Compose([
+									   transforms.ToTensor(),
+									   normalize_transform
+									])
+
+			train_dataset = datasets.MNIST(self.data_dir, train=True, download=True, transform=train_transforms)
+			val_dataset = datasets.MNIST(self.data_dir, train=True, download=True, transform=test_transforms)
+			test_dataset = datasets.MNIST(self.data_dir, train=False, download=True, transform=test_transforms)
+			train_dataset.name, val_dataset.name, test_dataset.name = 'DIGITS','DIGITS', 'DIGITS'
+			self.num_classes = 10
+		
+		elif self.name == "svhn":
+			mean, std = 0.5, 0.5
+			normalize_transform = transforms.Normalize((mean,), (std,)) \
+								  if normalize else transforms.Normalize((0,), (1,))
+			RGB2Gray = transforms.Lambda(lambda x: x.convert('L'))
+			train_transforms = transforms.Compose([
+								   RGB2Gray,
+								   transforms.Resize((28, 28)),
+								   transforms.ToTensor(),
+								   normalize_transform
+							   ])
+			test_transforms = transforms.Compose([
+								   RGB2Gray,
+								   transforms.Resize((28, 28)),
+								   transforms.ToTensor(),
+								   normalize_transform
+							   ])
+
+			train_dataset = datasets.SVHN(self.data_dir, split='train', download=True, transform=train_transforms)
+			val_dataset = datasets.SVHN(self.data_dir, split='train', download=True, transform=test_transforms)
+			test_dataset = datasets.SVHN(self.data_dir, split='test', download=True, transform=test_transforms)
+			self.num_classes = 10
+
+		elif self.name in ["real", "quickdraw", "sketch", "infograph", "clipart", "painting"]:
+
+			normalize_transform = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]) \
+								  if normalize else transforms.Normalize([0, 0, 0], [1, 1, 1])
+			
+			if apply_transforms:
+				data_transforms = {
+					'train': transforms.Compose([
+						transforms.Resize(256),
+						transforms.RandomCrop(224),
+						transforms.RandomHorizontalFlip(),
+						transforms.ToTensor(),
+						normalize_transform
+					]),
+				}
+			else:
+				data_transforms = {
+					'train': transforms.Compose([
+						transforms.Resize(224),
+						transforms.ToTensor(),
+						normalize_transform
+					]),
+				}
+
+			data_transforms['test'] = transforms.Compose([
+					transforms.Resize(224),
+					transforms.ToTensor(),
+					normalize_transform
+				])
+
+			train_dataset = DomainNetDataset('DomainNet', self.name, 'train', data_transforms['train'])
+			val_dataset = DomainNetDataset('DomainNet', self.name, 'val', data_transforms['test'])
+			test_dataset = DomainNetDataset('DomainNet', self.name, 'test', data_transforms['test'])
+
+			self.num_classes = train_dataset.get_num_classes()
+
+		self.train_dataset = train_dataset
+		self.val_dataset = val_dataset
+		self.test_dataset = test_dataset
+
+		return train_dataset, val_dataset, test_dataset
+
+	def get_loaders(self, shuffle=True, num_workers=4, normalize=True):
+		if not self.train_dataset: self.get_dsets(normalize=normalize)
+		
+		num_train = len(self.train_dataset)
+		self.train_size = num_train
+		print("Source name:")
+		print(self.name)
+		if self.name in ["mnist", "svhn"]:
+			
+			indices = list(range(num_train))
+			labeled_data_num = int(np.floor(self.labeled * num_train))
+			split = int(np.floor(self.valid_ratio * labeled_data_num))
+
+			train_idx, valid_idx, unlebeled_idx = indices[split:labeled_data_num], indices[:split],indices[labeled_data_num:]
+			print("split: ",split)
+			print("labeled: ",labeled_data_num)
+			print("total: ",num_train)
+   
+			train_sampler = SubsetRandomSampler(train_idx)
+			valid_sampler = SubsetRandomSampler(valid_idx)
+			unlabeled_sampler = SubsetRandomSampler(unlebeled_idx)
+
+		elif self.name in ["real", "quickdraw", "sketch", "infograph", "painting", "clipart"]:
+
+			train_idx = np.arange(len(self.train_dataset))
+			train_sampler = SubsetRandomSampler(train_idx)
+			valid_sampler = SubsetRandomSampler(np.arange(len(self.val_dataset)))
+
+		train_loader = torch.utils.data.DataLoader(self.train_dataset, sampler=train_sampler, \
+												   batch_size=self.batch_size, num_workers=num_workers)
+		val_loader = torch.utils.data.DataLoader(self.val_dataset, sampler=valid_sampler, batch_size=self.batch_size)
+		unlabeled_loader = torch.utils.data.DataLoader(self.val_dataset, sampler=unlabeled_sampler, batch_size=self.batch_size)
+		test_loader = torch.utils.data.DataLoader(self.test_dataset, batch_size=self.batch_size)
+
+		return train_loader, val_loader, test_loader, train_idx, unlabeled_loader

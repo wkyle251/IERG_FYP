@@ -21,7 +21,7 @@ torch.cuda.manual_seed(1234)
 
 from adapt.models.models import get_model
 import utils
-from data import ASDADataset
+from data import ASDADataset, SemiDataset
 from sample import *
 
 def run_active_adaptation(args, source_model, src_dset, num_classes, device):
@@ -30,7 +30,7 @@ def run_active_adaptation(args, source_model, src_dset, num_classes, device):
 	"""
 
 	# Load source data
-	src_train_loader, _, src_test_loader, _ = src_dset.get_loaders()
+	src_train_loader, _, src_test_loader, _,_ = src_dset.get_loaders()
 
 	# Load target data
 	target_dset = ASDADataset(args.target, valid_ratio=0)
@@ -189,17 +189,17 @@ def main():
 	device = torch.device("cuda") if args.use_cuda else torch.device("cpu")
 
 	# Load source data
-	src_dset = ASDADataset(args.source, batch_size=args.batch_size)
-	src_train_loader, src_val_loader, src_test_loader, _ = src_dset.get_loaders()
+	src_dset = SemiDataset(args.source, valid_ratio = 0.2,batch_size=args.batch_size,labeled=0.5)
+	src_train_loader, src_val_loader, src_test_loader, src_train_idx, unlabeled_loader = src_dset.get_loaders()
 	num_classes = src_dset.get_num_classes()
 	print('Number of classes: {}'.format(num_classes))
 
 	# Train / load a source model
 	source_model = get_model(args.cnn, num_cls=num_classes).to(device)	
-	source_file = '{}_{}_source.pth'.format(args.source, args.cnn)
+	source_file = '{}_{}_source_New.pth'.format(args.source, args.cnn)
 	source_path = os.path.join('checkpoints', 'source', source_file)	
 
-	if os.path.exists(source_path) and False: # Load existing source model
+	if os.path.exists(source_path) and False : # Load existing source model
 		print('Loading source checkpoint: {}'.format(source_path))
 		source_model.load_state_dict(torch.load(source_path, map_location=device), strict=False)
 		best_source_model = source_model
@@ -209,6 +209,8 @@ def main():
 		source_optimizer = optim.Adam(source_model.parameters(), lr=args.lr, weight_decay=args.wd)
 
 		for epoch in range(args.num_epochs):
+			# utils.semisupervised_train(source_model, device,src_train_loader, unlabeled_loader, source_optimizer, epoch)
+			# val_acc, _ = utils.test(source_model, device, src_val_loader, split="val")
 			utils.train(source_model, device, src_train_loader, source_optimizer, epoch)
 			val_acc, _ = utils.test(source_model, device, src_val_loader, split="val")
 			out_str = '[Epoch: {}] Val Accuracy: {:.3f} '.format(epoch, val_acc)
@@ -224,6 +226,23 @@ def main():
 	out_str = '{} Test Accuracy: {:.3f} '.format(args.source, test_acc)
 	print(out_str)
 
+	print("the end of training Source labeled model")
+	# Run Da on unlabeled source data
+	source_file = '{}_{}_source_da.pth'.format(args.source, args.cnn)
+	source_path = os.path.join('checkpoints', 'source', source_file)	
+	if os.path.exists(source_path) : # Load existing source model
+		print('Loading source checkpoint: {}'.format(source_path))
+		source_model.load_state_dict(torch.load(source_path, map_location=device), strict=False)
+		best_source_model = source_model
+	else:
+		best_source_model, src_model, discriminator = utils.run_unsupervised_da(best_source_model, src_train_loader, None, unlabeled_loader, \
+																		src_train_idx, num_classes, device, args)
+		
+		torch.save(best_source_model.state_dict(), os.path.join('checkpoints', 'source', source_file))
+	test_acc, _ = utils.test(best_source_model, device, src_test_loader, split="test")
+	out_str = '{} Test Accuracy: {:.3f} '.format(args.source, test_acc)
+	print(out_str)
+	print("the end of training All Source model")
 	# Run active adaptation experiments
 	target_accs = run_active_adaptation(args, best_source_model, src_dset, num_classes, device)
 	pp.pprint(target_accs)
