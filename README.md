@@ -42,7 +42,10 @@ And you're all set up!
 ### Train Active Domain Adaptation model
 
 Run ```python train.py``` to train an active adaptation model from scratch, by passing it appropriate arguments.
+```
+python train.py --load_from_cfg True --cfg_file config/digits/clue_mme.yml --use_cuda True
 
+```
 We include hyperparameter configurations to reproduce paper numbers on DIGITS and DomainNet as configurations inside the ```config``` folder. For instance, to reproduce DIGITS (SVHN->MNIST) results with CLUE+MME, run:
 
 ```

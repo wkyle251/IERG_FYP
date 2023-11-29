@@ -50,7 +50,7 @@ class DomainNetDataset(torch.utils.data.Dataset):
 class ASDADataset:
 	# Active Semi-supervised DA Dataset class
 	def __init__(self, name, data_dir='data', valid_ratio=0.2, batch_size=128, augment=False):
-		self.name = name
+		self.name = name # source
 		self.data_dir = data_dir
 		self.valid_ratio = valid_ratio
 		self.batch_size = batch_size

@@ -199,7 +199,7 @@ def main():
 	source_file = '{}_{}_source.pth'.format(args.source, args.cnn)
 	source_path = os.path.join('checkpoints', 'source', source_file)	
 
-	if os.path.exists(source_path): # Load existing source model
+	if os.path.exists(source_path) and False: # Load existing source model
 		print('Loading source checkpoint: {}'.format(source_path))
 		source_model.load_state_dict(torch.load(source_path, map_location=device), strict=False)
 		best_source_model = source_model

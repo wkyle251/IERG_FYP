@@ -289,7 +289,7 @@ def run_unsupervised_da(model, src_train_loader, tgt_sup_loader, tgt_unsup_loade
 	"""
 	adapt_net_file = os.path.join('checkpoints', 'adapt', '{}_{}_{:s}_net_{:s}_{:s}.pth'.format(args.da_strat, \
 								  args.uda_lr, args.cnn, args.source, args.target))
-	if os.path.exists(adapt_net_file):
+	if os.path.exists(adapt_net_file) and False:
 		print('Found pretrained checkpoint, loading...')
 		adapt_model = get_model('AdaptNet', num_cls=num_classes, weights_init=adapt_net_file, model=args.cnn)
 	else:
