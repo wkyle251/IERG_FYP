@@ -189,7 +189,7 @@ def main():
 	device = torch.device("cuda") if args.use_cuda else torch.device("cpu")
 
 	# Load source data
-	src_dset = SemiDataset(args.source, valid_ratio = 0.2,batch_size=args.batch_size,labeled=0.5)
+	src_dset = SemiDataset(args.source, valid_ratio = 0.2,batch_size=args.batch_size,labeled=0.2)
 	src_train_loader, src_val_loader, src_test_loader, src_train_idx, unlabeled_loader = src_dset.get_loaders()
 	num_classes = src_dset.get_num_classes()
 	print('Number of classes: {}'.format(num_classes))
@@ -199,7 +199,7 @@ def main():
 	source_file = '{}_{}_source_New.pth'.format(args.source, args.cnn)
 	source_path = os.path.join('checkpoints', 'source', source_file)	
 
-	if os.path.exists(source_path) and False : # Load existing source model
+	if os.path.exists(source_path): # Load existing source model
 		print('Loading source checkpoint: {}'.format(source_path))
 		source_model.load_state_dict(torch.load(source_path, map_location=device), strict=False)
 		best_source_model = source_model
@@ -235,7 +235,7 @@ def main():
 		source_model.load_state_dict(torch.load(source_path, map_location=device), strict=False)
 		best_source_model = source_model
 	else:
-		best_source_model, src_model, discriminator = utils.run_unsupervised_da(best_source_model, src_train_loader, None, unlabeled_loader, \
+		best_source_model, src_model, discriminator = utils.run_semi_supervised_learning(best_source_model, src_train_loader, None, unlabeled_loader, \
 																		src_train_idx, num_classes, device, args)
 		
 		torch.save(best_source_model.state_dict(), os.path.join('checkpoints', 'source', source_file))

@@ -311,6 +311,36 @@ def run_unsupervised_da(model, src_train_loader, tgt_sup_loader, tgt_unsup_loade
 	model, src_model, discriminator = adapt_model.tgt_net, adapt_model.src_net, adapt_model.discriminator
 	return model, src_model, discriminator
 			
+
+def run_semi_supervised_learning(model, src_train_loader, tgt_sup_loader, tgt_unsup_loader, train_idx, num_classes, device, args):
+	"""
+	Unsupervised adaptation of source model to target at round 0
+	Returns:
+		Model post adaptation
+	"""
+	adapt_net_file = os.path.join('checkpoints', 'adapt', '{}_{}_{:s}_net_{:s}_{:s}.pth'.format(args.da_strat, \
+								  args.uda_lr, args.cnn, args.source, args.target))
+	if os.path.exists(adapt_net_file) and False:
+		print('Found pretrained checkpoint, loading...')
+		adapt_model = get_model('AdaptNet', num_cls=num_classes, weights_init=adapt_net_file, model=args.cnn)
+	else:
+		print('No pretrained checkpoint found, training...')
+		source_file = '{}_{}_source.pth'.format(args.source, args.cnn)
+		source_path = os.path.join('checkpoints', 'source', source_file)	
+		adapt_model = get_model('AdaptNet', num_cls=num_classes, src_weights_init=source_path, model=args.cnn)
+		opt_net_tgt = optim.Adam(adapt_model.tgt_net.parameters(), lr=args.lr, weight_decay=args.wd)
+		uda_solver = get_solver(args.da_strat, adapt_model.tgt_net, src_train_loader, tgt_sup_loader, tgt_unsup_loader, \
+								train_idx, opt_net_tgt, 0, device, args)
+		for epoch in range(args.semisup_num_epochs):
+			if args.da_strat == 'dann':
+				opt_dis_adapt = optim.Adam(discriminator.parameters(), lr=args.uda_lr, betas=(0.9, 0.999), weight_decay=0)
+				uda_solver.solve(epoch, discriminator, opt_dis_adapt)
+			elif args.da_strat in ['mme', 'ft']:
+				uda_solver.solve(epoch)
+		adapt_model.save(adapt_net_file)
+	
+	model, src_model, discriminator = adapt_model.tgt_net, adapt_model.src_net, adapt_model.discriminator
+	return model, src_model, discriminator
 ######################################################################
 ##### Interactive visualization utilities
 ######################################################################

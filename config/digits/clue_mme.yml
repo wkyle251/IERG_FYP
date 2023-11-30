@@ -30,6 +30,7 @@ num_epochs: 50
 # Domain adaptation hyperparameters
 uda_lr: 0.0002
 uda_num_epochs: 60
+semisup_num_epochs: 500
 adapt_lr: 0.0002
 adapt_num_epochs: 60
 da_num_epochs: 60
